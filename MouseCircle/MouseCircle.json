@@ -1,0 +1,12 @@
+{
+    "Author": "MiniDemonic",
+    "Name": "MouseCircle",
+    "Description": "A circle around your mouse.",
+    "RepoUrl": "https://github.com/MiniDemonic/MouseCircle",
+    "Tags": [
+        "Cursor",
+        "Circle",
+        "Visibility"
+    ],
+    "Punchline": "Draws a circle around your mouse."
+}

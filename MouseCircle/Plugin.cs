@@ -1,12 +1,17 @@
-﻿using Dalamud.Game.Command;
+﻿using System;
+using Dalamud.Game.Command;
+using Dalamud.Bindings.ImGui;
 using Dalamud.IoC;
 using Dalamud.Plugin;
-using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
-using SamplePlugin.Windows;
+using MouseCircle.Windows;
+using System.Numerics;
+using FFXIVClientStructs.FFXIV.Client.System.Input;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.Game;
 
-namespace SamplePlugin;
+namespace MouseCircle;
 
 public sealed class Plugin : IDalamudPlugin
 {
@@ -17,12 +22,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    
 
-    private const string CommandName = "/pmycommand";
+    private const string CommandName = "/mousecircle";
 
     public Configuration Configuration { get; init; }
 
-    public readonly WindowSystem WindowSystem = new("SamplePlugin");
+    public readonly WindowSystem WindowSystem = new("MouseCircle");
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
 
@@ -30,11 +36,8 @@ public sealed class Plugin : IDalamudPlugin
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-        // You might normally want to embed resources and load them from the manifest stream
-        var goatImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "goat.png");
-
         ConfigWindow = new ConfigWindow(this);
-        MainWindow = new MainWindow(this, goatImagePath);
+        MainWindow = new MainWindow(this);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
@@ -46,6 +49,7 @@ public sealed class Plugin : IDalamudPlugin
 
         // Tell the UI system that we want our windows to be drawn through the window system
         PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
+        PluginInterface.UiBuilder.Draw += DrawOverlay;
 
         // This adds a button to the plugin installer entry of this plugin which allows
         // toggling the display status of the configuration ui
@@ -53,11 +57,7 @@ public sealed class Plugin : IDalamudPlugin
 
         // Adds another button doing the same but for the main ui of the plugin
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
-
-        // Add a simple message to the log with level set to information
-        // Use /xllog to open the log window in-game
-        // Example Output: 00:57:54.959 | INF | [SamplePlugin] ===A cool log message from Sample Plugin===
-        Log.Information($"===A cool log message from {PluginInterface.Manifest.Name}===");
+        
     }
 
     public void Dispose()
@@ -66,6 +66,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
+        PluginInterface.UiBuilder.Draw -= DrawOverlay;
         
         WindowSystem.RemoveAllWindows();
 
@@ -73,6 +74,70 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
+    }
+
+    private Vector2 mousePosition =  Vector2.Zero;
+    public void DrawOverlay()
+    {
+        unsafe
+        {
+            var input = UIInputData.Instance();
+            var flags = input->CursorInputs.MouseButtonHeldFlags;
+            
+            //var left = flags.HasFlag(MouseButtonFlags.LBUTTON);
+            var right = flags.HasFlag(MouseButtonFlags.RBUTTON);
+            //var middle = flags.HasFlag(MouseButtonFlags.MBUTTON);
+            
+            if (!right) mousePosition = ImGui.GetMousePos();
+        }
+        
+        DrawMouseCircle(mousePosition, new Vector4(1f, 0f, 1f, 1f));
+        DrawProgressCircle(mousePosition, GetCastProgress(), new Vector4(1f, 0f, 1f, 1f));
+    }
+
+    private static unsafe float GetCastProgress()
+    {
+        var actionManager = ActionManager.Instance();
+
+        var elapsed = actionManager->CastTimeElapsed;
+        var total =  actionManager->CastTimeTotal;
+
+        var casting = total > 0f && elapsed < total;
+        
+        return casting ? elapsed / total : 0f;
+    }
+
+    private static void DrawProgressCircle(Vector2 center, float progress, Vector4 color, float radius = 24f, float thickness = 3f)
+    {
+        var drawList = ImGui.GetForegroundDrawList();
+
+        const float startAngle = -MathF.PI / 2f;
+        var endAngle = startAngle + (MathF.PI * 2f * progress);
+        
+        drawList.PathArcTo(center, radius, startAngle, endAngle, 64);
+        drawList.PathStroke(ImGui.GetColorU32(color), ImDrawFlags.None, thickness);
+    }
+
+    private static void DrawMouseCircle(Vector2 center, Vector4 color, float radius = 16f, float thickness = 3f)
+    {
+        var drawList = ImGui.GetForegroundDrawList();
+        
+        drawList.AddCircle(
+            center,
+            radius,
+            ImGui.GetColorU32(color),
+            64,
+            thickness
+        );
+
+        color.W = 0.25f;
+        drawList.AddCircle(
+            center,
+            radius,
+            ImGui.GetColorU32(color),
+            64,
+            thickness+3f
+        );
     }
 
     private void OnCommand(string command, string args)

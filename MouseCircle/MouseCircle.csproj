@@ -10,6 +10,7 @@
 This is shown when the user expands the plugin entry in /xlplugins.</Description>
     <RepoUrl>https://github.com/goatcorp/SamplePlugin</RepoUrl>
     <Tags>sample;plugin;goats</Tags>
+    <Authors>MiniDemonic</Authors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,5 +18,6 @@ This is shown when the user expands the plugin entry in /xlplugins.</Description
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
+    <Content Include="MouseCircle.json" />
   </ItemGroup>
 </Project>
